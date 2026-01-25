@@ -20,6 +20,7 @@ def test_checkpoint(tmp_path):
 def test_lambdas(tmp_path):
     @belljar.jar(tmp_path)
     def adder(n):
+        belljar.includes(n)
         return lambda x: x + n
 
     assert adder(10)(5) == 15

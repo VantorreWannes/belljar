@@ -55,8 +55,6 @@ def jar(dir: Union[Path, Callable] = CACHE_DIR) -> Callable:
             state.update(func.__module__)
             state.update(func.__name__)
             state.update(inspect.getsource(func))
-            state.update(args)
-            state.update(kwargs)
 
             setattr(_context, _CACHE_PROPERTY_NAME, state)
 
@@ -75,7 +73,8 @@ def jar(dir: Union[Path, Callable] = CACHE_DIR) -> Callable:
                 with open(state.path(), "rb") as f:
                     return dill.load(f)
             finally:
-                delattr(_context, _CACHE_PROPERTY_NAME)
+                if hasattr(_context, _CACHE_PROPERTY_NAME):
+                    delattr(_context, _CACHE_PROPERTY_NAME)
 
         return wrapper
 
