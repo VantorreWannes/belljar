@@ -1,13 +1,13 @@
-from jar import needs, preserve
+import belljar
 
 
 def test_checkpoint(tmp_path):
     trace = []
 
-    @preserve(tmp_path)
+    @belljar.jar(tmp_path)
     def run(data):
         trace.append("setup")
-        needs(data)
+        belljar.includes(data)
         trace.append("work")
         return "done"
 
@@ -18,7 +18,7 @@ def test_checkpoint(tmp_path):
 
 
 def test_lambdas(tmp_path):
-    @preserve(tmp_path)
+    @belljar.jar(tmp_path)
     def adder(n):
         return lambda x: x + n
 

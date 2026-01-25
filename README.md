@@ -1,42 +1,41 @@
-# jar 🫙
+# belljar 🫙
 
-**Reliable caching for complex Python code.**
+**Conditional memoization for complex runtime state.**
 
-Standard caching decorators often break when dealing with class methods, lambdas, or open files.
+Standard decorators check the cache *before* execution. `belljar` lets you check the cache *during* execution.
 
-`jar` solves this by letting you verify the cache *inside* the function. Instead of guessing dependencies from arguments, you declare them explicitly with `needs()`.
-
-This allows you to checkpoint execution based on runtime state—like an open file handle or a database cursor—and exit early if that specific state has been processed before. Because it uses `dill`, it supports closures and local classes out of the box.
+By calling `includes()`, you update the hash with runtime state (like file handles or database cursors). If `belljar` detects that this specific state has been processed before, **execution stops immediately** and the cached result is returned.
 
 ## Usage
 
-Use `needs()` to update the cache signature. If `jar` recognizes the sequence of code, arguments, and `needs`, it stops execution and returns the stored result.
-
 ```python
-import jar
+from belljar import jar, includes
 
-class Parser:
-    def __init__(self, mode):
-        self.mode = mode
+@jar
+def parse_log(file_handle):
+    # 1. State is initially just the function args.
+    
+    # 2. Add runtime state to the hash (e.g., file cursor position).
+    includes(file_handle)
 
-    @jar.preserve
-    def process(self, file_handle):
-        # Hash the file handle's current state (cursor, mode, etc).
-        # 'self' and function args are included automatically.
-        jar.needs(file_handle)
+    # CHECKPOINT: 
+    # If this exact sequence (args + file state) exists in the cache,
+    # execution STOPS here and returns the stored value.
+    
+    print("Heavy processing...")
+    return file_handle.read()
+```
 
-        # CHECKPOINT: 
-        # If this exact state exists in the cache, we stop here.
-        print("Parsing...") 
-        return file_handle.read()
+## Features
 
-p = Parser(mode="strict")
+- **Mid-Execution Cache Hits:** Skip the heavy lifting if the intermediate state is recognized.
+- **Complex Serialization:** Uses `dill` instead of `pickle`, supporting lambdas, local classes, and closures.
+- **Zero Config:** caches to `.jar/` by default, or pass a path: `@jar(Path("/tmp/cache"))`.
 
-# 1. Runs logic ("Parsing...")
-with open("data.txt", "r") as f:
-    p.process(f) 
+## Installation
 
-# 2. File handle is fresh, but state is identical -> Returns cache
-with open("data.txt", "r") as f:
-    p.process(f)
+```bash
+uv add belljar
+# or
+pip install belljar
 ```

@@ -39,7 +39,7 @@ class _CacheState:
         return os.path.exists(self.path())
 
 
-def needs(value: Any) -> None:
+def includes(value: Any) -> None:
     if hasattr(_context, _CACHE_PROPERTY_NAME):
         cache = cast(_CacheState, getattr(_context, _CACHE_PROPERTY_NAME))
         cache.update(value)
@@ -47,7 +47,7 @@ def needs(value: Any) -> None:
             raise _CacheHit(cache.fingerprint())
 
 
-def preserve(dir: Union[Path, Callable] = CACHE_DIR) -> Callable:
+def jar(dir: Union[Path, Callable] = CACHE_DIR) -> Callable:
     def factory(func: Callable) -> Callable:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
@@ -85,4 +85,4 @@ def preserve(dir: Union[Path, Callable] = CACHE_DIR) -> Callable:
     return factory
 
 
-__all__ = ["preserve", "needs"]
+__all__ = ["jar", "includes"]
