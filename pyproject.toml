@@ -1,0 +1,22 @@
+[project]
+name = "jar"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Wannes Vantorre", email = "vantorrewannes@gmail.com" }
+]
+requires-python = ">=3.14"
+dependencies = [
+    "dill>=0.4.1",
+    "xxhash>=3.6.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.9.26,<0.10.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.2",
+]
