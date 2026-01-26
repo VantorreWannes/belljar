@@ -1,28 +1,46 @@
-import belljar
+from belljar import check, include, store
 
 
-def test_checkpoint(tmp_path):
-    trace = []
+def test_runs(tmp_path):
+    ran = False
 
-    @belljar.jar(tmp_path)
-    def run(data):
-        trace.append("setup")
-        belljar.includes(data)
-        trace.append("work")
-        return "done"
+    @store(tmp_path)
+    def task():
+        nonlocal ran
+        ran = True
+        return 10
 
-    run("v1")
-    run("v1")
-
-    assert trace == ["setup", "work", "setup"]
+    assert task() == 10
+    assert ran
 
 
-def test_lambdas(tmp_path):
-    @belljar.jar(tmp_path)
-    def adder(n):
-        belljar.includes(n)
-        return lambda x: x + n
+def test_skips(tmp_path):
+    runs = 0
 
-    assert adder(10)(5) == 15
+    @store(tmp_path)
+    def task():
+        nonlocal runs
+        check()
+        runs += 1
+        return 10
 
-    assert adder(10)(5) == 15
+    task()
+    task()
+
+    assert runs == 1
+
+
+def test_varies(tmp_path):
+    runs = 0
+
+    @store(tmp_path)
+    def task(val):
+        nonlocal runs
+        include(val)
+        check()
+        runs += 1
+
+    task("a")
+    task("b")
+
+    assert runs == 2
