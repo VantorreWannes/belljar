@@ -9,6 +9,7 @@ By calling `include()`, you update the hash with runtime state (like file handle
 ## Usage
 
 ```python
+import belljar
 
 @belljar.store
 def parse_log(file_handle):

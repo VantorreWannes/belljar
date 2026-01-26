@@ -114,9 +114,9 @@ def store(dir: Union[Path, Callable] = DEFAULT_CACHE_DIR) -> Callable:
             context = cast(Context, getattr(thread_context, CONTEXT_PROPERTY_NAME))
             cache_dir = CacheDir(dir if not callable(dir) else DEFAULT_CACHE_DIR)
             fingerprint = Fingerprint(xxhash.xxh64())
-            fingerprint.update(func.__module__)
-            fingerprint.update(func.__name__)
-            fingerprint.update(inspect.getsource(func))
+            fingerprint.update(dill.source.getname(func))
+            fingerprint.update(dill.source.getmodule(func))
+            fingerprint.update(dill.source.getsource(func))
             task_cache = TaskCache(cache_dir, fingerprint)
             context.push(task_cache)
 
