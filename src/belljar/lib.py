@@ -1,5 +1,4 @@
 import functools
-import inspect
 import os
 import threading
 from pathlib import Path
@@ -12,7 +11,7 @@ CONTEXT_PROPERTY_NAME = "__context"
 DEFAULT_CACHE_DIR = Path(".jar")
 
 
-class CacheHit(Exception):
+class CacheHit(BaseException):
     pass
 
 
