@@ -1,136 +1,91 @@
 import functools
-import os
+import hashlib
 import threading
 from pathlib import Path
-from typing import Any, Callable, Union, cast
+from typing import Any, Callable, Optional, Union
 
 import dill
-import xxhash
-
-CONTEXT_PROPERTY_NAME = "__context"
-DEFAULT_CACHE_DIR = Path(".jar")
 
 
-class CacheHit(BaseException):
+class Identity:
+    def __init__(self, seed: Optional[bytes] = None):
+        self._hash = hashlib.sha256(seed or b"")
+
+    def update(self, value: Any):
+        self._hash.update(dill.dumps(value))
+
+    @property
+    def key(self) -> str:
+        return self._hash.hexdigest()
+
+
+class Registry(threading.local):
+    def __init__(self):
+        self.stack: list[tuple[Identity, Path]] = []
+
+    def current(self) -> tuple[Identity, Path]:
+        if not self.stack:
+            raise RuntimeError("Out of belljar context.")
+        return self.stack[-1]
+
+
+_registry = Registry()
+
+
+class Jar:
+    @staticmethod
+    def path_for(identity: Identity, root: Path) -> Path:
+        return root / f"{identity.key}.dill"
+
+    @staticmethod
+    def load(identity: Identity, root: Path) -> Any:
+        with open(Jar.path_for(identity, root), "rb") as f:
+            return dill.load(f)
+
+    @staticmethod
+    def save(identity: Identity, root: Path, data: Any):
+        path = Jar.path_for(identity, root)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            dill.dump(data, f)
+
+
+class CacheHit(Exception):
     pass
 
 
-class Fingerprint:
-    def __init__(self, fingerprint: xxhash.xxh64) -> None:
-        self._fingerprint = fingerprint
-
-    def get(self) -> xxhash.xxh64:
-        return self._fingerprint
-
-    def update(self, value: Any) -> None:
-        self._fingerprint.update(dill.dumps(value))
-
-
-class CacheDir:
-    def __init__(self, dir: Path) -> None:
-        os.makedirs(dir, exist_ok=True)
-        self.dir = dir
-
-    @classmethod
-    def file_name(cls, fingerprint: Fingerprint) -> str:
-        digest = fingerprint.get().hexdigest()
-        return digest + ".dill"
-
-    def file_path(self, fingerprint: Fingerprint) -> Path:
-        file_name = self.file_name(fingerprint)
-        return self.dir / file_name
-
-    def file_exists(self, fingerprint: Fingerprint) -> bool:
-        file_path = self.file_path(fingerprint)
-        return os.path.exists(file_path)
-
-
-class TaskCache:
-    def __init__(
-        self,
-        cache_dir: CacheDir,
-        fingerprint: Fingerprint,
-    ) -> None:
-        self._cache_dir = cache_dir
-        self._fingerprint = fingerprint
-
-    def update(self, value: Any) -> None:
-        self._fingerprint.update(value)
-
-    def exists(self) -> bool:
-        return self._cache_dir.file_exists(self._fingerprint)
-
-    def save(self, output: Any) -> None:
-        file_path = self._cache_dir.file_path(self._fingerprint)
-        with open(file_path, "wb") as f:
-            dill.dump(output, f)
-
-    def load(self) -> Any:
-        file_path = self._cache_dir.file_path(self._fingerprint)
-        with open(file_path, "rb") as f:
-            return dill.load(f)
-
-
-class Context:
-    def __init__(self) -> None:
-        self.tasks: list[TaskCache] = []
-
-    def push(self, task_cache: TaskCache) -> None:
-        self.tasks.append(task_cache)
-
-    def task_cache(self) -> TaskCache:
-        return self.tasks[-1]
-
-    def pop(self) -> None:
-        self.tasks.pop()
-
-
-class ThreadContext(threading.local):
-    def __init__(self) -> None:
-        setattr(self, CONTEXT_PROPERTY_NAME, Context())
-
-
-thread_context = ThreadContext()
+def include(value: Any):
+    identity, _ = _registry.current()
+    identity.update(value)
 
 
 def check():
-    context = cast(Context, getattr(thread_context, CONTEXT_PROPERTY_NAME))
-    task_cache = context.task_cache()
-    if task_cache.exists():
+    identity, root = _registry.current()
+    if Jar.path_for(identity, root).exists():
         raise CacheHit()
 
 
-def include(value: Any) -> None:
-    context = cast(Context, getattr(thread_context, CONTEXT_PROPERTY_NAME))
-    task_cache = context.task_cache()
-    task_cache.update(value)
+def store(path_or_func: Union[Path, Callable] = Path(".jar")):
+    root_path = path_or_func if isinstance(path_or_func, Path) else Path(".jar")
 
+    def decorator(func: Callable):
+        static_seed = dill.dumps((func.__name__, dill.source.getsource(func)))
 
-def store(dir: Union[Path, Callable] = DEFAULT_CACHE_DIR) -> Callable:
-    def factory(func: Callable) -> Callable:
         @functools.wraps(func)
-        def wrapper(*args, **kwargs) -> Any:
-            context = cast(Context, getattr(thread_context, CONTEXT_PROPERTY_NAME))
-            cache_dir = CacheDir(dir if not callable(dir) else DEFAULT_CACHE_DIR)
-            fingerprint = Fingerprint(xxhash.xxh64())
-            fingerprint.update(dill.source.getname(func))
-            fingerprint.update(dill.source.getmodule(func))
-            fingerprint.update(dill.source.getsource(func))
-            task_cache = TaskCache(cache_dir, fingerprint)
-            context.push(task_cache)
+        def wrapper(*args, **kwargs):
+            identity = Identity(static_seed)
+            identity.update((args, kwargs))
 
+            _registry.stack.append((identity, root_path))
             try:
-                output = func(*args, **kwargs)
-                task_cache.save(output)
-                return output
+                result = func(*args, **kwargs)
+                Jar.save(identity, root_path, result)
+                return result
             except CacheHit:
-                return task_cache.load()
+                return Jar.load(identity, root_path)
             finally:
-                context.pop()
+                _registry.stack.pop()
 
         return wrapper
 
-    if callable(dir):
-        return factory(dir)
-
-    return factory
+    return decorator(path_or_func) if callable(path_or_func) else decorator
