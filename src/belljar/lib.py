@@ -74,7 +74,6 @@ def store(path_or_func: Union[Path, Callable] = Path(".jar")):
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             identity = Identity(static_seed)
-            identity.update((args, kwargs))
 
             _registry.stack.append((identity, root_path))
             try:
