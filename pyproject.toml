@@ -1,6 +1,6 @@
 [project]
 name = "belljar"
-version = "1.3.0"
+version = "1.4.0"
 description = "Extremely simple to use callable memoization decorator library."
 readme = "README.md"
 authors = [
